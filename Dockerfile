@@ -1,7 +1,7 @@
 FROM eclipse-temurin:22
 
 # Install necessary dependencies
-RUN apt-get update && apt-get install -y maven vim
+RUN apt-get update && apt-get install -y maven vim curl
 
 # Set up application workspace
 WORKDIR /app

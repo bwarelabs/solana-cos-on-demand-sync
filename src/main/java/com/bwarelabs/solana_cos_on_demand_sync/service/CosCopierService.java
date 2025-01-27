@@ -1,13 +1,16 @@
 package com.bwarelabs.solana_cos_on_demand_sync.service;
 
 import com.bwarelabs.solana_cos_on_demand_sync.CosUploader;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PreDestroy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 @Service
@@ -36,20 +39,24 @@ public class CosCopierService {
         this.secretKey = secretKey;
     }
 
-    public void copyObjects(int startKey, int endKey, String destinationBucketName, String destinationPrefixPath) {
-        // TODO - validation
+    @Autowired
+    private EmailService emailService;  // Inject Email Service
+
+    @Async  // Runs the task asynchronously
+    public void copyObjectsAsync(int startKey, int endKey, String destinationBucketName, String destinationPrefixPath, String userEmail) {
+        String taskId = UUID.randomUUID().toString(); // Unique Task ID
+        logger.info("Starting async copy process with Task ID: " + taskId);
 
         try {
-            logger.info("Copying objects from range " + startKey + " to " + endKey);
             CosUploader cosUploader = new CosUploader(this.sourceBucket, destinationBucketName, this.sourceRegion, this.secretId, this.secretKey);
 
-            final int BATCH_SIZE = 10000;  // Define a batch size
+            final int BATCH_SIZE = 10_000;
             long currentStart = startKey;
 
             while (currentStart < endKey) {
                 long nextBatchEnd = Math.min(currentStart + (BATCH_SIZE * 1000), endKey);
 
-                logger.info("Generating batch from " + currentStart + " to " + nextBatchEnd);
+                logger.info("Generating keys from " + currentStart + " to " + nextBatchEnd);
                 List<String> objectKeys = generateObjectKeys(currentStart, nextBatchEnd);
 
                 // print the objectKeys
@@ -58,16 +65,19 @@ public class CosCopierService {
                 }
 
                 logger.info("Starting copy process for " + objectKeys.size() + " objects...");
-                cosUploader.batchCopyObjects(objectKeys, "");
+                cosUploader.batchCopyObjects(objectKeys, destinationPrefixPath);
 
                 logger.info("One batch completed. Moving to next batch...");
                 currentStart = nextBatchEnd; // Move to next batch
             }
 
-            logger.info("Copy process completed.");
+            // Task completed successfully
+            logger.info("Copy process completed successfully!");
+            emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
+
         } catch (Exception e) {
-            logger.severe("Error copying objects: " + e.getMessage());
-            e.printStackTrace();
+            logger.severe("Error in async copy: " + e.getMessage());
+            emailService.sendEmail(userEmail, "Copy Task Failed", "There was an error processing your copy request.");
         }
     }
 
