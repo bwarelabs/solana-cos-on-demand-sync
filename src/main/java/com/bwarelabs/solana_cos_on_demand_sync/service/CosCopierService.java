@@ -60,23 +60,23 @@ public class CosCopierService {
                 List<String> objectKeys = generateObjectKeys(currentStart, nextBatchEnd);
 
                 // print the objectKeys
-                for (String key : objectKeys) {
-                    System.out.println(key);
-                }
+//                for (String key : objectKeys) {
+//                    System.out.println(key);
+//                }
 
-                logger.info("Starting copy process for " + objectKeys.size() + " objects...");
+                logger.info("Starting copy process for " + objectKeys.size() + " objects for task ID: " + taskId);
                 cosUploader.batchCopyObjects(objectKeys, destinationPrefixPath);
 
-                logger.info("One batch completed. Moving to next batch...");
+                logger.info("One batch completed. Moving to next batch for task ID: " + taskId);
                 currentStart = nextBatchEnd; // Move to next batch
             }
 
             // Task completed successfully
-            logger.info("Copy process completed successfully!");
+            logger.info("Copy process completed successfully for task ID: " + taskId);
             emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
 
         } catch (Exception e) {
-            logger.severe("Error in async copy: " + e.getMessage());
+            logger.severe("Error in async copy: " + e.getMessage() + " for task ID: " + taskId);
             emailService.sendEmail(userEmail, "Copy Task Failed", "There was an error processing your copy request.");
         }
     }
