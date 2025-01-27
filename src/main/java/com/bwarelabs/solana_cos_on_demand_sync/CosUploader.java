@@ -121,26 +121,29 @@ public class CosUploader {
                 CopyObjectRequest copyRequest = new CopyObjectRequest(sourceRegion, sourceBucket, sourceKey, destinationBucket, destinationKey);
                 Copy copy = transferManager.copy(copyRequest);
                 copy.waitForCopyResult();
-                return; // Exit if successful
+                logger.info("Successfully copied " + sourceKey + " to " + destinationKey);
+                return;
             } catch (CosServiceException e) {
                 if (e.getStatusCode() == 404) {
-                    logger.warning("Not Found error: The object " + sourceKey + " does not exist.");
+                    logger.warning("Object not found: " + sourceKey);
                     return;
                 } else {
                     logger.severe("COS Service Exception copying " + sourceKey + " to " + destinationKey + ": " + e.getMessage());
                 }
             } catch (Exception e) {
-                logger.severe("Error copying " + sourceKey + " to " + destinationKey + ": " + e.getMessage());
+                logger.severe("Retrying " + sourceKey + " (attempt " + (attempts + 1) + " of " + MAX_RETRIES + ")");
             }
 
             attempts++;
             if (attempts < MAX_RETRIES) {
-                logger.info("Retrying " + sourceKey + " (attempt " + (attempts + 1) + " of " + MAX_RETRIES + ")");
+                int backoff = (int) Math.pow(2, attempts) * RETRY_DELAY_MS;
+                logger.info("Retrying " + sourceKey + " in " + backoff + " ms");
+
                 try {
-                    Thread.sleep(RETRY_DELAY_MS);
+                    Thread.sleep(backoff);
                 } catch (InterruptedException ignored) {}
             }
         }
-        logger.severe("Failed to copy " + sourceKey + " after " + MAX_RETRIES + " attempts.");
+        logger.severe("Max retries reached for " + sourceKey);
     }
 }
