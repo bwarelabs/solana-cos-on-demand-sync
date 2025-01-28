@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,19 +23,29 @@ public class CosSyncController {
     }
 
     @PostMapping
-    public ResponseEntity<String> startCopyProcess(
+    public ResponseEntity<Map<String, String>> startCopyProcess(
             @RequestParam @Min(0) int startBlockNumber,
             @RequestParam @Min(0) int endBlockNumber,
             @RequestParam @NotBlank @Pattern(regexp = "^[a-z0-9-]{3,63}$") String bucketName,
             @RequestParam @NotBlank String userEmail,
             @RequestParam(required = false, defaultValue = "") String pathPrefix) {
 
-            if (startBlockNumber > endBlockNumber) {
+        if (startBlockNumber > endBlockNumber) {
             throw new IllegalArgumentException("startBlockNumber cannot be greater than endBlockNumber");
         }
 
+        if (!cosCopierService.bucketExists(bucketName)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Bucket does not exist",
+                    "message", "The specified bucket does not exist or cannot be accessed."));
+        }
+
+        // Validate write access
+        if (!cosCopierService.canWriteToBucket(bucketName)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Write access denied", "message", "Insufficient permissions to write to the specified bucket."));
+        }
+
         cosCopierService.copyObjectsAsync(startBlockNumber, endBlockNumber, bucketName, pathPrefix, userEmail);
-        return ResponseEntity.ok("Copy process started asynchronously. You will receive an email upon completion.");
+        return ResponseEntity.ok(Map.of("message", "Copy process started asynchronously.", "details", "You will receive an email upon completion."));
     }
 
     @GetMapping()
@@ -48,7 +59,8 @@ public class CosSyncController {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("startBlockNumber", "Integer - The starting block number.");
         parameters.put("endBlockNumber", "Integer - The ending block number (must be greater than startBlockNumber).");
-        parameters.put("bucketName", "String (3-63 characters, lowercase letters, numbers, and hyphens only) - The destination bucket.");
+        parameters.put("bucketName",
+                "String (3-63 characters, lowercase letters, numbers, and hyphens only) - The destination bucket.");
         parameters.put("userEmail", "String (Valid email) - The email to receive notifications.");
         parameters.put("pathPrefix", "String (Optional) - Prefix for object storage.");
 
