@@ -8,8 +8,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
-@RequestMapping("/sync")
+@RequestMapping("/")
 @Validated
 public class CosSyncController {
     private final CosCopierService cosCopierService;
@@ -32,5 +35,25 @@ public class CosSyncController {
 
         cosCopierService.copyObjectsAsync(startBlockNumber, endBlockNumber, bucketName, pathPrefix, userEmail);
         return ResponseEntity.ok("Copy process started asynchronously. You will receive an email upon completion.");
+    }
+
+    @GetMapping()
+    public ResponseEntity<Map<String, Object>> getApiInfo() {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Welcome to the Solana COS Sync API.");
+        response.put("usage", "To start a sync process, send a POST request to '/' with the required parameters.");
+        response.put("method", "POST");
+        response.put("endpoint", "/");
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("startBlockNumber", "Integer - The starting block number.");
+        parameters.put("endBlockNumber", "Integer - The ending block number (must be greater than startBlockNumber).");
+        parameters.put("bucketName", "String (3-63 characters, lowercase letters, numbers, and hyphens only) - The destination bucket.");
+        parameters.put("userEmail", "String (Valid email) - The email to receive notifications.");
+        parameters.put("pathPrefix", "String (Optional) - Prefix for object storage.");
+
+        response.put("parameters", parameters);
+
+        return ResponseEntity.ok(response);
     }
 }
