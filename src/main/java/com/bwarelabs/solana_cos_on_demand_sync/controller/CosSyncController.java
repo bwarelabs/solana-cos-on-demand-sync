@@ -27,7 +27,7 @@ public class CosSyncController {
             @RequestParam @Min(0) int startBlockNumber,
             @RequestParam @Min(0) int endBlockNumber,
             @RequestParam @NotBlank @Pattern(regexp = "^[a-z0-9-]{3,63}$") String bucketName,
-            @RequestParam @NotBlank String userEmail,
+            @RequestParam(required = false) String userEmail,
             @RequestParam(required = false, defaultValue = "") String pathPrefix) {
 
         if (startBlockNumber > endBlockNumber) {

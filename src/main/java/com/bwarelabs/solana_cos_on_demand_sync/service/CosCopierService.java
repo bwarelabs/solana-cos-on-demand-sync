@@ -83,11 +83,14 @@ public class CosCopierService {
 
             // Task completed successfully
             logger.info("Copy process completed successfully for task ID: " + taskId);
-            emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
-
+            if (userEmail != null && !userEmail.isBlank()) {
+                emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
+            }
         } catch (Exception e) {
             logger.severe("Error in async copy: " + e.getMessage() + " for task ID: " + taskId);
-            emailService.sendEmail(userEmail, "Copy Task Failed", "There was an error processing your copy request.");
+            if (userEmail != null && !userEmail.isBlank()) {
+                emailService.sendEmail(userEmail, "Copy Task Failed", "There was an error processing your copy request.");
+            }
         }
     }
 
