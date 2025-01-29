@@ -61,7 +61,7 @@ public class CosSyncController {
         parameters.put("endBlockNumber", "Integer - The ending block number (must be greater than startBlockNumber).");
         parameters.put("bucketName",
                 "String (3-63 characters, lowercase letters, numbers, and hyphens only) - The destination bucket.");
-        parameters.put("userEmail", "String (Valid email) - The email to receive notifications.");
+        parameters.put("userEmail", "String (Optional) (Valid email) - The email to receive notifications.");
         parameters.put("pathPrefix", "String (Optional) - Prefix for object storage.");
 
         response.put("parameters", parameters);
