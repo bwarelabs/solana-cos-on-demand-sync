@@ -37,6 +37,8 @@ curl -X POST "https://getsolana-api.bwarelabs.com" \
 ### 3. Receive Notification
 After the sync process completes, you will receive an email confirmation with details about the copied data. Ensure that the provided email address is valid and accessible.
 
+> **Note:** If you want to import that data into a HBase cluster and be able to serve data from it, see [solana-syncer](https://github.com/bwarelabs/solana-syncer) - HbaseSync
+
 ## GDPR Compliance Disclaimer
 By providing your email address to initiate the sync process, you acknowledge and accept that we may send you transactional emails related to the completion status of your request. We do not use your email for marketing purposes or share it with third parties. We do not store your email.
 
