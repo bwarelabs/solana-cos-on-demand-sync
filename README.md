@@ -19,6 +19,8 @@ To use the sync service, you must first grant write access to our system’s roo
 
 ![bucket-acl](https://github.com/user-attachments/assets/20d9567d-6b25-4f66-bdb2-e7580437e38f)
 
+> **Note:** Right now, the transfer is limited to 'eu-frankfurt' region. Your bucket needs to be located in 'eu-frankfurt'
+
 ### 2. Initiate a Data Sync Request
 Once the necessary permissions are in place, you can initiate a data sync by specifying the desired **start and end block numbers** along with your **Tencent COS bucket name** and **email address** for notifications.
 
