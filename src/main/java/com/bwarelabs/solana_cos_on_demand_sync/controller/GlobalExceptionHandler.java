@@ -8,6 +8,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.nio.file.NoSuchFileException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -64,4 +65,11 @@ public class GlobalExceptionHandler {
         logger.severe("Unexpected error: " + ex.getMessage());
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred. Please try again later.");
     }
+
+    @ExceptionHandler(NoSuchFileException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingResource(Exception ex) {
+        logger.warning("Static resource not found: " + ex.getMessage());
+        return buildErrorResponse(HttpStatus.NOT_FOUND, "Requested resource not found.");
+    }
+
 }
