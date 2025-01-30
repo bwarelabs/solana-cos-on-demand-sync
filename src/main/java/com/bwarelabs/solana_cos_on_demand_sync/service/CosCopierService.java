@@ -2,18 +2,17 @@ package com.bwarelabs.solana_cos_on_demand_sync.service;
 
 import com.bwarelabs.solana_cos_on_demand_sync.CosUploader;
 
+import com.bwarelabs.solana_cos_on_demand_sync.exceptions.InternalErrorException;
+import com.bwarelabs.solana_cos_on_demand_sync.exceptions.UserTypeException;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.ClientConfig;
 import com.qcloud.cos.auth.COSCredentials;
 import com.qcloud.cos.auth.BasicCOSCredentials;
 import com.qcloud.cos.exception.CosClientException;
 import com.qcloud.cos.exception.CosServiceException;
-import com.qcloud.cos.model.CopyObjectRequest;
 import com.qcloud.cos.model.ObjectMetadata;
 import com.qcloud.cos.model.PutObjectRequest;
-import com.qcloud.cos.transfer.Copy;
 import com.qcloud.cos.region.Region;
-import com.qcloud.cos.transfer.TransferManager;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -58,7 +57,7 @@ public class CosCopierService {
     @Async // Runs the task asynchronously
     public void copyObjectsAsync(int startKey, int endKey, String destinationBucketName, String destinationPrefixPath,
             String userEmail) {
-        String taskId = UUID.randomUUID().toString(); // Unique Task ID
+        String taskId = UUID.randomUUID().toString();
         logger.info("Starting async copy process with Task ID: " + taskId);
 
         try {
@@ -67,30 +66,46 @@ public class CosCopierService {
 
             final int BATCH_SIZE = 10_000;
             long currentStart = startKey;
+            List<String> userErrors = new ArrayList<>();
+            List<String> internalErrors = new ArrayList<>();
 
             while (currentStart < endKey) {
                 long nextBatchEnd = Math.min(currentStart + (BATCH_SIZE * 1000), endKey);
-
-                logger.info("Generating keys from " + currentStart + " to " + nextBatchEnd);
                 List<String> objectKeys = generateObjectKeys(currentStart, nextBatchEnd);
-
                 logger.info("Starting copy process for " + objectKeys.size() + " objects for task ID: " + taskId);
-                cosUploader.batchCopyObjects(objectKeys, destinationPrefixPath);
 
-                logger.info("One batch completed. Moving to next batch for task ID: " + taskId);
-                currentStart = nextBatchEnd; // Move to next batch
+                try {
+                    cosUploader.batchCopyObjects(objectKeys, destinationPrefixPath);
+                } catch (UserTypeException e) {
+                    logger.warning("User-type errors occurred: " + e.getMessage());
+                    userErrors.add(e.getMessage());
+                } catch (InternalErrorException e) {
+                    logger.severe("Internal error occurred: " + e.getMessage());
+                    internalErrors.add(e.getMessage());
+                } catch (Exception e) {
+                    logger.severe("Unexpected error: " + e.getMessage());
+                }
+
+                currentStart = nextBatchEnd;
             }
 
-            // Task completed successfully
-            logger.info("Copy process completed successfully for task ID: " + taskId);
-            if (userEmail != null && !userEmail.isBlank()) {
-                emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
+            if (!userErrors.isEmpty()) {
+                emailService.sendEmail(userEmail, "Copy Task Completed with Errors",
+                        "Some objects could not be copied due to access or missing issues:\n\n"
+                                + String.join("\n", userErrors));
+                return;
+
             }
+
+            if (!internalErrors.isEmpty()) {
+                throw new InternalErrorException("Some objects could not be copied. \n", null);
+            }
+
+            emailService.sendEmail(userEmail, "Copy Task Completed", "Your copy process has successfully completed.");
         } catch (Exception e) {
-            logger.severe("Error in async copy: " + e.getMessage() + " for task ID: " + taskId);
-            if (userEmail != null && !userEmail.isBlank()) {
-                emailService.sendEmail(userEmail, "Copy Task Failed", "There was an error processing your copy request.");
-            }
+            emailService.sendEmail(userEmail, "Copy Task Failed",
+                    "Internal error occurred. " + e.getMessage()
+                            + "\n Please contact us at solana@bwarelabs.com and provide taskId: " + taskId + "\n");
         }
     }
 

@@ -45,7 +45,7 @@ public class CosSyncController {
         }
 
         cosCopierService.copyObjectsAsync(startBlockNumber, endBlockNumber, bucketName, pathPrefix, userEmail);
-        return ResponseEntity.ok(Map.of("message", "Copy process started asynchronously.", "details", "You will receive an email upon completion."));
+        return ResponseEntity.ok(Map.of("message", "Copy process started.", "details", "You will receive an email upon completion."));
     }
 
     @GetMapping()

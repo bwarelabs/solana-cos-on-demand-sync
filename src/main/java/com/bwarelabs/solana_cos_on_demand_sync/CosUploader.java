@@ -1,5 +1,7 @@
 package com.bwarelabs.solana_cos_on_demand_sync;
 
+import com.bwarelabs.solana_cos_on_demand_sync.exceptions.InternalErrorException;
+import com.bwarelabs.solana_cos_on_demand_sync.exceptions.UserTypeException;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.ClientConfig;
 import com.qcloud.cos.auth.COSCredentials;
@@ -10,6 +12,7 @@ import com.qcloud.cos.transfer.Copy;
 import com.qcloud.cos.region.Region;
 import com.qcloud.cos.transfer.TransferManager;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
@@ -30,7 +33,7 @@ public class CosUploader {
     private final TransferManager transferManager;
 
     public CosUploader(String sourceBucket, String destinationBucket,
-                     String sourceRegion, String secretId, String secretKey) {
+            String sourceRegion, String secretId, String secretKey) {
         this.sourceBucket = sourceBucket;
         this.destinationBucket = destinationBucket;
 
@@ -51,7 +54,7 @@ public class CosUploader {
         return new COSClient(credentials, clientConfig);
     }
 
-    public void batchCopyObjects(List<String> objectKeys, String destinationPrefix) {
+    public void batchCopyObjects(List<String> objectKeys, String destinationPrefix) throws Exception {
         int totalObjects = objectKeys.size();
         logger.info("Starting batch copy for " + totalObjects + " objects...");
 
@@ -60,39 +63,51 @@ public class CosUploader {
 
         int submittedTasks = 0;
         int completedTasks = 0;
+        List<String> userTypeErrors = new ArrayList<>();
+        List<String> internalErrors = new ArrayList<>();
 
-        // Start by submitting up to BATCH_SIZE tasks
         for (; submittedTasks < Math.min(BATCH_SIZE, totalObjects); submittedTasks++) {
             String key = objectKeys.get(submittedTasks);
             String destinationKey = destinationPrefix + key;
             completionService.submit(() -> {
                 try {
                     copyByKey(key, destinationKey);
+                } catch (UserTypeException e) {
+                    logger.severe("User error: " + e.getMessage());
+                    synchronized (userTypeErrors) {
+                        userTypeErrors.add(e.getMessage());
+                    }
                 } catch (Exception e) {
-                    logger.severe("Error copying " + key + ": " + e.getMessage());
+                    logger.severe("Internal error copying " + key + ": " + e.getMessage());
+                    synchronized (internalErrors) {
+                        internalErrors.add("Failed to copy " + key + ": " + e.getMessage());
+                    }
                 }
                 return null;
             });
         }
 
-        logger.info("Submitted first batch of " + submittedTasks + " tasks");
-        logger.info("Additional tasks will be submitted as slots open up");
-
-        // Process completed tasks and submit new ones as slots open up
         while (completedTasks < totalObjects) {
             try {
-                completionService.take().get();  // Wait for a task to complete
+                completionService.take().get();
                 completedTasks++;
 
-                // Submit a new task if there are remaining objects
                 if (submittedTasks < totalObjects) {
                     String key = objectKeys.get(submittedTasks);
                     String destinationKey = destinationPrefix + key;
                     completionService.submit(() -> {
                         try {
                             copyByKey(key, destinationKey);
+                        } catch (UserTypeException e) {
+                            logger.severe("User error: " + e.getMessage());
+                            synchronized (userTypeErrors) {
+                                userTypeErrors.add(e.getMessage());
+                            }
                         } catch (Exception e) {
-                            logger.severe("Error copying " + key + ": " + e.getMessage());
+                            logger.severe("Internal error copying " + key + ": " + e.getMessage());
+                            synchronized (internalErrors) {
+                                internalErrors.add("Failed to copy " + key + ": " + e.getMessage());
+                            }
                         }
                         return null;
                     });
@@ -109,27 +124,46 @@ public class CosUploader {
 
         executorService.shutdown();
         logger.info("Batch copy completed");
+
+        if (!userTypeErrors.isEmpty() || !internalErrors.isEmpty()) {
+            String errorMessage = "";
+
+            if (!userTypeErrors.isEmpty()) {
+                errorMessage +=  String.join("\n", userTypeErrors) + "\n";
+            }
+            if (!internalErrors.isEmpty()) {
+                errorMessage += String.join("\n", internalErrors);
+            }
+
+            if (!userTypeErrors.isEmpty()) {
+                throw new UserTypeException(errorMessage); // **Throw UserTypeException if user errors exist**
+            } else {
+                throw new InternalErrorException(errorMessage, null); // **Otherwise, throw InternalErrorException**
+            }
+        }
     }
 
     /**
-     * Copies a single object from the source COS bucket to the destination COS bucket.
+     * Copies a single object from the source COS bucket to the destination COS
+     * bucket.
      */
-    private void copyByKey(String sourceKey, String destinationKey) {
+    private void copyByKey(String sourceKey, String destinationKey) throws Exception {
         int attempts = 0;
         while (attempts < MAX_RETRIES) {
             try {
-                CopyObjectRequest copyRequest = new CopyObjectRequest(sourceRegion, sourceBucket, sourceKey, destinationBucket, destinationKey);
+                CopyObjectRequest copyRequest = new CopyObjectRequest(sourceRegion, sourceBucket, sourceKey,
+                        destinationBucket, destinationKey);
                 Copy copy = transferManager.copy(copyRequest);
                 copy.waitForCopyResult();
                 logger.info("Successfully copied " + sourceKey + " to " + destinationKey);
                 return;
             } catch (CosServiceException e) {
                 if (e.getStatusCode() == 404) {
-                    logger.warning("Object not found: " + sourceKey);
-                    return;
-                } else {
-                    logger.severe("COS Service Exception copying " + sourceKey + " to " + destinationKey + ": " + e.getMessage());
+                    logger.severe("Object not found: " + sourceKey);
+                    throw new UserTypeException("Error: The object '" + sourceKey + "' does not exist.");
                 }
+                logger.severe(
+                        "COS Service Exception copying " + sourceKey + " to " + destinationKey + ": " + e.getMessage());
             } catch (Exception e) {
                 logger.severe("Retrying " + sourceKey + " (attempt " + (attempts + 1) + " of " + MAX_RETRIES + ")");
             }
@@ -138,12 +172,12 @@ public class CosUploader {
             if (attempts < MAX_RETRIES) {
                 int backoff = (int) Math.pow(2, attempts) * RETRY_DELAY_MS;
                 logger.info("Retrying " + sourceKey + " in " + backoff + " ms");
-
                 try {
                     Thread.sleep(backoff);
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }
         }
-        logger.severe("Max retries reached for " + sourceKey);
+        throw new InternalErrorException("Max retries reached for " + sourceKey, null);
     }
 }
