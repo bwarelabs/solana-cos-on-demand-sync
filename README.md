@@ -12,7 +12,7 @@ To use the sync service, you must first grant write access to our system’s roo
 1. Log in to your [Tencent Cloud Console](https://cloud.tencent.com/).
 2. Navigate to **Cloud Object Storage (COS)** and select your bucket.
 3. Open the **Permissions** settings -> Bucket ACL
-4. Add our **Root ID** with **write access** to the bucket. **Root ID:** `TODO-ADD-ID`
+4. Add our **Root ID** with **write access** to the bucket. **Root ID:** `200034403835`
 5. Save the changes to apply the permissions.
 
 > **Note:** If your bucket has public write access, no further action is required.
